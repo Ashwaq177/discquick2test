@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>DISC Quick Test</title>
+<!-- Chart.js for the bar chart -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+:root{
+--bg:#f7f8fa; --card:#ffffff; --line:#e6e8ec; --text:#111827; --muted:#6b7280;
+/* Colors per request */
+--D:#E53748; /* Dominance */
+--I:#38B180; /* Influence */
+--S:#38B180; /* Steadiness */
+--C:#06303F; /* Conscientiousness */
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;line-height:1.6;padding:20px}
+h1{text-align:center;margin:0 0 8px;color:var(--C)}
+.sub{margin:0 auto 16px;text-align:center;color:var(--muted)}
+.container{max-width:980px;margin:0 auto}
+.question{margin:14px 0;padding:14px;background:#fff;border:1px solid var(--line);border-radius:10px}
+.question p{margin:0 0 8px;font-weight:600}
+label{display:block;margin:6px 0;cursor:pointer}
+input[type="radio"]{accent-color:#111}
+.actions{display:flex;gap:10px;justify-content:center;margin:18px 0}
+button{background:var(--C);color:#fff;border:none;border-radius:8px;padding:12px 18px;font-weight:700;cursor:pointer}
+button:hover{opacity:.95}
+.warn{display:none;text-align:center;color:#b91c1c;font-size:14px;margin:8px 0}
+.result{display:none;margin-top:18px;padding:16px;background:#fff;border:1px solid var(--line);border-radius:10px}
+.mainStyles{display:flex;flex-direction:column;gap:12px;margin:4px 0 10px}
+.mainTitle{display:inline-block;font-size:20px;font-weight:800;padding:8px 12px;border-radius:8px;color:#fff;width:max-content}
+.title-D{background:var(--D)} .title-I{background:var(--I)} .title-S{background:var(--S)} .title-C{background:var(--C)}
+.desc{font-size:14px;margin:4px 0 4px}
+.divider{height:1px;background:var(--line);margin:6px 0}
+.counts{color:var(--muted);font-size:13px}
+.chartWrap{margin-top:14px}
+canvas{max-width:640px;margin:0 auto;display:block}
+</style>
+</head>
+<body>
+<div class="container">
+<h1>DISC Quick Test</h1>
+<p class="sub">For each question, choose ONE option that describes you best.</p>
+
+<form id="discForm"></form>
+
+<div class="actions">
+<button type="button" id="showBtn">Show Result</button>
+</div>
+<div id="warn" class="warn">Please answer all 15 questions.</div>
+
+<div id="result" class="result">
+<h2 style="margin:0 0 8px;">Your Result</h2>
+<div id="mainStyles" class="mainStyles"></div>
+<div id="counts" class="counts"></div>
+<div class="chartWrap">
+<canvas id="resultChart"></canvas>
+</div>
+</div>
+</div>
+
+<script>
+/* ------------------------------
+QUESTIONS (no letters shown)
+------------------------------ */
+const QUESTIONS = [
+["I like to get results fast","I enjoy talking with everyone","I help others stay calm","I check details carefully"],
+["I take charge when needed","I like to motivate people","I work well in a steady routine","I plan before I act"],
+["I decide quickly","I like people to feel happy","I listen more than I speak","I analyze things deeply"],
+["I feel comfortable leading","I share stories and ideas","I like harmony in the team","I check facts before speaking"],
+["I like challenges","I bring energy to the team","I stay patient with others","I notice mistakes others miss"],
+["I handle problems fast","I like to talk and connect","I care about people’s feelings","I ask for data to be sure"],
+["I don’t mind taking risks","I build friendships easily","I help team members when they struggle","I prefer clear rules"],
+["I like direct answers","I encourage others to try new things","I am loyal to my team","I prefer clear steps and instructions"],
+["I make big decisions","I like making people smile","I stay calm under pressure","I work best with facts"],
+["I speak up when things are slow","I enjoy group discussions","I help solve team conflicts","I check every detail twice"],
+["I like leading projects","I share ideas often","I don’t like sudden changes","I stick to the plan"],
+["I push people to finish tasks","I connect people together","I avoid arguments","I prefer work to be perfect"],
+["I focus on winning","I start conversations easily","I keep the team stable","I like clear information"],
+["I get straight to the point","I love teamwork and fun","I value trust in people","I check work for mistakes"],
+["I make fast choices","I enjoy group activities","I like helping quietly","I organize things in order"]
+];
+
+// Index → Style mapping (0->D, 1->I, 2->S, 3->C)
+const INDEX_TO_STYLE = ['D','I','S','C'];
+
+// Descriptions
+const STYLE_DESCRIPTIONS = {
+D: "Direct & results-focused. Decisive, enjoys challenges, moves fast. Watchouts: impatience and pushing too hard.",
+I: "Outgoing & persuasive. Energizes others, great at communication. Watchouts: follow-through and details.",
+S: "Calm & supportive. Patient, loyal, keeps teams steady. Watchouts: avoiding conflict and resisting change.",
+C: "Analytical & quality-driven. Accurate, organized, fact-based. Watchouts: perfectionism and slow decisions."
+};
+
+// Colors
+const COLORS = { D:'#E53748', I:'#38B180', S:'#38B180', C:'#06303F' };
+
+// Build the quiz dynamically
+(function buildQuiz(){
+const form = document.getElementById('discForm');
+QUESTIONS.forEach((opts, qi) => {
+const q = document.createElement('div');
+q.className = 'question';
+q.innerHTML = `<p>${qi+1})</p>`;
+opts.forEach((text, oi) => {
+const id = `q${qi+1}_${oi}`;
+const label = document.createElement('label');
+label.setAttribute('for', id);
+label.innerHTML = `<input type="radio" id="${id}" name="q${qi+1}" value="${oi}"> ${text}`;
+q.appendChild(label);
+});
+form.appendChild(q);
+});
+})();
+
+// Validate and score
+document.getElementById('showBtn').addEventListener('click', () => {
+const answers = [];
+for(let i=1;i<=15;i++){
+const checked = document.querySelector(`input[name="q${i}"]:checked`);
+answers.push(checked ? Number(checked.value) : null);
+}
+
+// validation
+if (answers.some(v => v === null)) {
+document.getElementById('warn').style.display = 'block';
+document.getElementById('result').style.display = 'none';
+return;
+} else {
+document.getElementById('warn').style.display = 'none';
+}
+
+// score
+const counts = { D:0, I:0, S:0, C:0 };
+answers.forEach(idx => {
+const k = INDEX_TO_STYLE[idx];
+if (k) counts[k]++;
+});
+
+// find top styles (allow 2 max; order D>I>S>C)
+const max = Math.max(counts.D, counts.I, counts.S, counts.C);
+const order = ['D','I','S','C'];
+const mainsAll = order.filter(k => counts[k] === max);
+const mains = mainsAll.slice(0, 2);
+
+// render section
+renderMainTitles(mains);
+renderCounts(counts);
+renderChart(counts);
+
+document.getElementById('result').style.display = 'block';
+document.getElementById('result').scrollIntoView({behavior:'smooth', block:'start'});
+});
+
+function renderMainTitles(mains){
+const box = document.getElementById('mainStyles');
+box.innerHTML = '';
+mains.forEach((k, idx) => {
+const title = document.createElement('div');
+title.className = `mainTitle title-${k}`;
+title.textContent = k;
+box.appendChild(title);
+
+const p = document.createElement('div');
+p.className = 'desc';
+p.textContent = STYLE_DESCRIPTIONS[k] || '';
+box.appendChild(p);
+
+if (mains.length === 2 && idx === 0) {
+const div = document.createElement('div');
+div.className = 'divider';
+box.appendChild(div);
+}
+});
+}
+
+function renderCounts(counts){
+document.getElementById('counts').textContent =
+`Counts — D:${counts.D}, I:${counts.I}, S:${counts.S}, C:${counts.C}`;
+}
+
+let chartRef = null;
+function renderChart(counts){
+const ctx = document.getElementById('resultChart').getContext('2d');
+if (chartRef) chartRef.destroy();
+chartRef = new Chart(ctx, {
+type: 'bar',
+data: {
+labels: ['D','I','S','C'],
+datasets: [{
+label: 'Your DISC Scores',
+data: [counts.D, counts.I, counts.S, counts.C],
+backgroundColor: [COLORS.D, COLORS.I, COLORS.S, COLORS.C]
+}]
+},
+options: {
+responsive: true,
+scales: { y: { beginAtZero: true, precision: 0 } },
+plugins: { legend: { display: false } }
+}
+});
+}
+</script>
+</body>
+</html>
